@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:activiti="http://activiti.org/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" typeLanguage="http://www.w3.org/2001/XMLSchema" expressionLanguage="http://www.w3.org/1999/XPath" targetNamespace="http://www.collibra.com/apiv2">
+  <process id="disableInactiveUsers" name="Disable Inactive Users" isExecutable="true">
+    <documentation>Daily workflow that finds inactive users and disables those who last logged in greater than a certain duration</documentation>
+    <startEvent id="startevent1" name="Start">
+      <extensionElements>
+        <activiti:formProperty id="tvcUsers" name="TableViewConfig for Last Login" type="string" default="{&quot;TableViewConfig&quot;:{&quot;displayLength&quot;:-1,&quot;Resources&quot;:{&quot;User&quot;:{&quot;Id&quot;:{&quot;name&quot;:&quot;userId&quot;},&quot;CreatedOn&quot;:{&quot;name&quot;:&quot;createdOn&quot;},&quot;LastLogin&quot;:{&quot;name&quot;:&quot;lastLogin&quot;},&quot;enabled&quot;:{&quot;name&quot;:&quot;enabled&quot;},&quot;Filter&quot;:{&quot;AND&quot;:[{&quot;OR&quot;:[{&quot;Field&quot;:{&quot;name&quot;:&quot;lastLogin&quot;,&quot;operator&quot;:&quot;LESS_THAN&quot;,&quot;value&quot;:&quot;LAST_LOGIN_TIME&quot;}},{&quot;AND&quot;:[{&quot;Field&quot;:{&quot;name&quot;:&quot;createdOn&quot;,&quot;operator&quot;:&quot;LESS_THAN&quot;,&quot;value&quot;:&quot;LAST_LOGIN_TIME&quot;}},{&quot;Field&quot;:{&quot;name&quot;:&quot;lastLogin&quot;,&quot;operator&quot;:&quot;NULL&quot;}}]}]},{&quot;Field&quot;:{&quot;name&quot;:&quot;enabled&quot;,&quot;operator&quot;:&quot;EQUALS&quot;,&quot;value&quot;:true}}]},&quot;Order&quot;:[{&quot;Field&quot;:{&quot;name&quot;:&quot;userId&quot;,&quot;order&quot;:&quot;ASC&quot;}}]}},&quot;Columns&quot;:[{&quot;Column&quot;:{&quot;fieldName&quot;:&quot;userId&quot;}},{&quot;Column&quot;:{&quot;fieldName&quot;:&quot;lastLogin&quot;}}]}}" readable="false"></activiti:formProperty>
+        <activiti:formProperty id="daysInactive" name="Days Inactive" type="long" default="35" readable="false"></activiti:formProperty>
+        <activiti:formProperty id="userExclude" name="Users to Exclude" type="string" default="00000000-0000-0000-0000-000000900002" readable="false"></activiti:formProperty>
+      </extensionElements>
+      <timerEventDefinition>
+        <timeCycle>0 0 2 ? * * *</timeCycle>
+      </timerEventDefinition>
+    </startEvent>
+    <scriptTask id="scripttask1" name="Find Users and Disable" scriptFormat="groovy" activiti:autoStoreVariables="false">
+      <script><![CDATA[import com.collibra.dgc.core.api.dto.query.outputmodule.ExportJSONRequest
+import com.collibra.dgc.core.api.dto.user.*
+import java.text.SimpleDateFormat
+import groovy.json.JsonSlurperClassic
+
+// Version: 2.0.1
+// Date: 2024-08-09
+// Description: Script to disable inactive users, excluding a specified user ID.
+
+loggerApi.info("Disabling Inactive Users")
+
+// Assuming daysInactive is provided as a parameter
+def now = new Date().getTime()
+def inactiveTime = now - (1000L * 60L * 60L * 24L * daysInactive)
+
+def outputResponseInactiveUsers = outputModuleApi.exportJSON(ExportJSONRequest.builder()
+    .viewConfig(tvcUsers.replaceAll("LAST_LOGIN_TIME", "${inactiveTime}").toString()).build())
+def outputInJson = new JsonSlurperClassic().parseText(outputResponseInactiveUsers)
+
+def userExcludeFound = false
+
+if (outputInJson.iTotalRecords) {
+    for (usr in outputInJson.aaData) {
+        if (usr.userId != userExclude) {
+            loggerApi.info("User ${usr.userId} disabled")
+            userApi.changeUser(ChangeUserRequest.builder().id(string2Uuid(usr.userId)).enabled(false).build())
+        } else {
+            userExcludeFound = true
+            loggerApi.info("User ${usr.userId} is excluded from disabling.")
+        }
+    }
+}
+
+if (!userExcludeFound) {
+    loggerApi.info("User ${userExclude} not found in the list of inactive users.")
+}]]></script>
+    </scriptTask>
+    <sequenceFlow id="flow1" sourceRef="startevent1" targetRef="scripttask1"></sequenceFlow>
+    <endEvent id="endevent1" name="End"></endEvent>
+    <sequenceFlow id="flow2" sourceRef="scripttask1" targetRef="endevent1"></sequenceFlow>
+  </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_disableInactiveUsers">
+    <bpmndi:BPMNPlane bpmnElement="disableInactiveUsers" id="BPMNPlane_disableInactiveUsers">
+      <bpmndi:BPMNShape bpmnElement="startevent1" id="BPMNShape_startevent1">
+        <omgdc:Bounds height="35.0" width="35.0" x="100.0" y="100.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="scripttask1" id="BPMNShape_scripttask1">
+        <omgdc:Bounds height="71.0" width="115.0" x="170.0" y="82.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="endevent1" id="BPMNShape_endevent1">
+        <omgdc:Bounds height="35.0" width="35.0" x="330.0" y="100.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge bpmnElement="flow1" id="BPMNEdge_flow1">
+        <omgdi:waypoint x="135.0" y="117.0"></omgdi:waypoint>
+        <omgdi:waypoint x="170.0" y="117.0"></omgdi:waypoint>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow2" id="BPMNEdge_flow2">
+        <omgdi:waypoint x="285.0" y="117.0"></omgdi:waypoint>
+        <omgdi:waypoint x="330.0" y="117.0"></omgdi:waypoint>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>

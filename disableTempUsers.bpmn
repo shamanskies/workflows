@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:activiti="http://activiti.org/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" typeLanguage="http://www.w3.org/2001/XMLSchema" expressionLanguage="http://www.w3.org/1999/XPath" targetNamespace="http://www.collibra.com/apiv2">
+  <process id="disableTempUsers" name="Disable Temp Users" isExecutable="true">
+    <documentation>Daily workflow that finds active temporary user accounts and disables them after 60 days.</documentation>
+    <startEvent id="startevent1" name="Start">
+      <extensionElements>
+        <activiti:formProperty id="tvcUsers" name="TableViewConfig for Create On" type="string" default="{&quot;TableViewConfig&quot;:{&quot;displayLength&quot;:-1,&quot;Resources&quot;:{&quot;User&quot;:{&quot;Id&quot;:{&quot;name&quot;:&quot;userId&quot;},&quot;userName&quot;:{&quot;name&quot;:&quot;userName&quot;},&quot;CreatedOn&quot;:{&quot;name&quot;:&quot;createdOn&quot;},&quot;enabled&quot;:{&quot;name&quot;:&quot;enabled&quot;},&quot;Filter&quot;:{&quot;AND&quot;:[{&quot;Field&quot;:{&quot;name&quot;:&quot;createdOn&quot;,&quot;operator&quot;:&quot;LESS_THAN&quot;,&quot;value&quot;:&quot;CREATED_ON_TIME&quot;}},{&quot;Field&quot;:{&quot;name&quot;:&quot;enabled&quot;,&quot;operator&quot;:&quot;EQUALS&quot;,&quot;value&quot;:true}},{&quot;Field&quot;:{&quot;name&quot;:&quot;userName&quot;,&quot;operator&quot;:&quot;CONTAINS&quot;,&quot;value&quot;:&quot;TEMP&quot;}}]},&quot;Order&quot;:[{&quot;Field&quot;:{&quot;name&quot;:&quot;userId&quot;,&quot;order&quot;:&quot;ASC&quot;}}]}},&quot;Columns&quot;:[{&quot;Column&quot;:{&quot;fieldName&quot;:&quot;userId&quot;}},{&quot;Column&quot;:{&quot;fieldName&quot;:&quot;createdOn&quot;}}]}}" readable="false"></activiti:formProperty>
+        <activiti:formProperty id="daysActive" name="Days Active" type="long" default="3" readable="false"></activiti:formProperty>
+      </extensionElements>
+      <timerEventDefinition>
+        <timeCycle>0 0 2,12,17 ? * *
+</timeCycle>
+      </timerEventDefinition>
+    </startEvent>
+    <scriptTask id="scripttask1" name="Find Users and Disable" scriptFormat="groovy" activiti:autoStoreVariables="false">
+      <script><![CDATA[import com.collibra.dgc.core.api.dto.query.outputmodule.ExportJSONRequest;
+import com.collibra.dgc.core.api.dto.user.*;
+import java.text.SimpleDateFormat;
+
+// Version: 1.0.1
+// Date: 2024-08-06
+
+loggerApi.info ("Disabling Temp Users");
+
+def now = new Date().getTime()
+def activeTime = now - (1000L * 60L * 60L * 24L * daysActive)
+
+def outputResponseTempUsers = outputModuleApi.exportJSON(ExportJSONRequest.builder()
+	.viewConfig(tvcUsers.replaceAll("CREATED_ON_TIME","${activeTime}").toString()).build())
+def outputInJson = new groovy.json.JsonSlurperClassic().parseText(outputResponseTempUsers)
+
+if (outputInJson.iTotalRecords) {
+	for (usr in outputInJson.aaData) {
+	   loggerApi.info ("userId ${usr.userId} disabled");
+	        userApi.changeUser(ChangeUserRequest.builder().id(string2Uuid(usr.userId)).enabled(false).build())
+	}
+}]]></script>
+    </scriptTask>
+    <sequenceFlow id="flow1" sourceRef="startevent1" targetRef="scripttask1"></sequenceFlow>
+    <endEvent id="endevent1" name="End"></endEvent>
+    <sequenceFlow id="flow2" sourceRef="scripttask1" targetRef="endevent1"></sequenceFlow>
+  </process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_disableTempUsers">
+    <bpmndi:BPMNPlane bpmnElement="disableTempUsers" id="BPMNPlane_disableTempUsers">
+      <bpmndi:BPMNShape bpmnElement="startevent1" id="BPMNShape_startevent1">
+        <omgdc:Bounds height="35.0" width="35.0" x="100.0" y="100.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="scripttask1" id="BPMNShape_scripttask1">
+        <omgdc:Bounds height="71.0" width="115.0" x="170.0" y="82.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape bpmnElement="endevent1" id="BPMNShape_endevent1">
+        <omgdc:Bounds height="35.0" width="35.0" x="330.0" y="100.0"></omgdc:Bounds>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge bpmnElement="flow1" id="BPMNEdge_flow1">
+        <omgdi:waypoint x="135.0" y="117.0"></omgdi:waypoint>
+        <omgdi:waypoint x="170.0" y="117.0"></omgdi:waypoint>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge bpmnElement="flow2" id="BPMNEdge_flow2">
+        <omgdi:waypoint x="285.0" y="117.0"></omgdi:waypoint>
+        <omgdi:waypoint x="330.0" y="117.0"></omgdi:waypoint>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
