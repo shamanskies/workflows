@@ -6,3 +6,4 @@ There should be an accompanying README PDF for each workflow.
 - [x] 2024.02
 - [x] 2024.05
 - [x] 2024.10
+- [ ] 2024.11
